@@ -64,20 +64,32 @@ use uuid::{self, Builder, Uuid}; //, as_vec_string};
 
 // aws_sdk_dynamodb type conversion from AttributeValue to Rust type
 
-pub fn as_string(val: Option<&AttributeValue>, default: &String) -> String {
-    if let Some(v) = val {
-        if let Ok(s) = v.as_s() {
-            return s.to_owned(); // clone from aws_sdk_dynamodb source
-        }
+
+pub fn as_string(val: AttributeValue) -> Option<String> {
+    match val {
+       AttributeValue::S(s) => Some(s),
+       AttributeValue::Null(b) => { 
+            if b == false {
+                panic!("Got Null with bool of false")
+            }
+            None
+        },
+       _ => panic!("as_string(): Expected AttributeValue::S or ::NULL"),
     }
-    default.to_owned()
 }
 
-pub fn as_string2(val: AttributeValue) -> Option<String> {
-    let AttributeValue::S(s) = val else {
-        panic!("as_string2(): Expected AttributeValue::S")
-    };
-    Some(s)
+pub fn as_n(val: AttributeValue) -> Option<String> {
+    match val {
+       AttributeValue::N(s) => Some(s),
+       AttributeValue::Null(b) => { 
+            if b == false {
+                panic!("Got Null with bool of false")
+            }
+            None
+          },
+       _ => panic!("as_n(): Expected AttributeValue::N or ::NULL"),
+    }
+
 }
 
 pub fn as_dt2(val: AttributeValue) -> Option<String> {
@@ -239,21 +251,19 @@ pub fn as_li2(val: AttributeValue) -> Option<Vec<i64>> {
     Some(vs)
 }
 
-pub fn as_bool2(val: AttributeValue) -> Option<bool> {
-    let AttributeValue::Bool(bl) = val else {
-        panic!("as_bool2(): Expected AttributeValue::Bool")
-    };
-    Some(bl)
+pub fn as_bool(val: AttributeValue) -> Option<bool> {
+    match val {
+        AttributeValue::Bool(bl) => Some(bl),
+        AttributeValue::Null(bl) =>  {
+            if bl == false {
+                panic!("Got Null with bool of false")
+            }
+            None
+          },
+         _ => { panic!("as_bool(): Expected AttributeValue::Bool or ::Null") },
+    }
 }
 
-pub fn as_bool(val: Option<&AttributeValue>, default: bool) -> bool {
-    if let Some(v) = val {
-        if let Ok(s) = v.as_bool() {
-            return s.clone();
-        }
-    }
-    default
-}
 
 pub fn as_blob2(val: AttributeValue) -> Option<Vec<u8>> {
     if let AttributeValue::B(blob) = val {
@@ -541,6 +551,7 @@ pub fn as_ldt2(val: AttributeValue) -> Option<Vec<Option<String>>> {
     Some(vs)
 }
 
+#[derive(Debug)]
 pub struct SortK(String);
 
 impl SortK {
@@ -590,8 +601,8 @@ impl From<HashMap<String, AttributeValue>> for Prefix {
         let Some(p) = value.remove("SortK") else {
             panic!("no SortK value for Prefix")
         };
-        let Some(s) = as_string2(p) else {
-            panic!("expected Some for as_string2() got None")
+        let Some(s) = as_string(p) else {
+            panic!("expected Some for as_string() got None")
         };
         prefix.0 = s;
         prefix
@@ -760,10 +771,21 @@ impl From<HashMap<String, AttributeValue>> for NodeType {
         for (k, v) in value.drain() {
             match k.as_str() {
                 "PKey" => {}
-                "SortK" => ty.short = as_string2(v).unwrap(),
-                "Name" => ty.long = as_string2(v).unwrap(),
-                "Reference" => ty.reference = as_bool2(v).unwrap(),
-                "OvBs" => {}
+                "SortK" => ty.short = as_string(v).unwrap(),
+                "Name" => ty.long = as_string(v).unwrap(),
+                "Reference" => {
+                            match as_bool(v) {
+                                Some(bl) => {ty.reference=bl},
+                                None => {panic!("From AV for NodeType expected bool got None")}
+                            }
+                        },
+                "OvBs" => {},
+                "Ty" => {
+                        match as_string(v) {
+                            Some(s) => {ty.short=s},
+                            None => panic!("From AV for NodeType Ty, expected string got Null")
+                        }
+                        },
                 _ => panic!("NodeType from impl: unexpected attribute got [{}]", k),
             }
         }

@@ -1,9 +1,9 @@
 #![warn(unused_variables)]
 #![warn(dead_code)]
 use super::{
-    as_blob2, as_bool, as_bool2, as_float2, as_i16, as_i16_2, as_i32_2, as_i8_2, as_int2, as_lb2,
+    as_blob2, as_bool,  as_float2, as_i16, as_i16_2, as_i32_2, as_i8_2, as_int2, as_lb2,
     as_lblob2, as_lbool2, as_ldt2, as_lfloat2, as_li16_2, as_li32_2, as_li8_2, as_lint2, as_ln2,
-    as_ls2, as_luuid, as_string, as_string2, as_uuid, as_vi32, as_vi8,
+    as_ls2, as_luuid, as_string, as_uuid, as_vi32, as_vi8, as_n,
 };
 use aws_sdk_dynamodb::types::AttributeValue;
 use std::{any::Any, collections::HashMap};
@@ -36,7 +36,7 @@ pub const BL: &str = "Bl";
 pub const B: &str = "B";
 pub const DT: &str = "DT";
 pub const P: &str = "P"; // attribute name feeds P_S, P_N, P_? indexes
-pub const TY: &str = "Ty"; // item type (GoGraph system type)
+pub const TY: &str = "ty"; // item type (GoGraph system type)
                            //pub const TYA : &str = "TyA";           // attribute type/storage type .e.g LF, LI, LBl etc
 pub const E: &str = "E";
 // scalar sets
@@ -45,10 +45,9 @@ pub const SN: &str = "SN";
 pub const SS: &str = "SS";
 pub const SBL: &str = "SBL";
 // Edge
-pub const CNT: &str = "Cnt"; // edge count
-pub const ND: &str = "Nd";
-pub const BID: &str = "Bid";
-//pub const ID : &str = "Id";
+pub const CNT: &str = "N"; // edge count
+pub const ND: &str = "nd";
+pub const BID: &str = "id";       // try changing attribute name from Id to Bid
 pub const XF: &str = "xf";
 // Propagated Scalars, scalar lists (determined by SK value)
 pub const LS: &str = "LS";
@@ -109,9 +108,11 @@ pub struct DataItem {
     pub is_node: Option<bool>,
     pub ix: Option<String>, // used during double-propagation load "X": not processed, "Y": processed
     // scalar types
-    // pub f   : Option<f64>           // Nullable type has None for Null values
-    // pub i   : Option<i64>           // Nullable type has None for Null values
+
     pub n: Option<String>, // number type. No conversion from db storage format. Used for bulk loading operations only.
+    pub f: Option<f64>,           // Nullable type has None for Null values
+    pub i: Option<i64>,           // Nullable type has None for Null values  
+    
     pub s: Option<String>, // string
     pub bl: Option<bool>,  // boolean
     pub b: Option<Vec<u8>>, // byte array
@@ -137,7 +138,6 @@ pub struct DataItem {
     //  Edge
     pub cnt: Option<i64>,      // edge count
     pub nd: Option<Vec<Uuid>>, //uuid.UID // list of node UIDs>, overflow block UIDs>, oveflow index UIDs
-    //pub xbl : Option<Vec<bool>>,      // replaced by lnu. Used for propagated child scalars (List data). True means associated child value is NULL (ie. is not defined)
     pub xf: Option<Vec<i8>>, // flag: used in uid-predicate 1 : c-UID>, 2 : c-UID is soft deleted>, 3 : ovefflow UID>, 4 : overflow block full
     pub bid: Option<Vec<i32>>, // current maximum overflow batch id.
     // overflow
@@ -160,8 +160,8 @@ impl DataItem {
             is_node: None,
             ix: None,
             // scalars
-            // i: None,    // internal, db uses attribute N
-            // f: None,    // internal, db uses attribute N
+            i: None,    // internal, db uses attribute N
+            f: None,    // internal, db uses attribute N
             n: None, // copy of N - useful when no conversion is necessary
             s: None,
             bl: None,
@@ -349,14 +349,14 @@ impl From<HashMap<String, AttributeValue>> for DataItem {
 
         // get SK first - to determine item type
         if let Some(v) = value.remove(SK) {
-            di.sk = SK_(as_string2(v).unwrap());
+            di.sk = SK_(as_string(v).unwrap());
         }
         // get TyA  - to determine whether N attribute contains Int or Float values
         // if let Some(v) = value.remove(TYA) {
-        //     di.tya = as_string2(v);
+        //     di.tya = as_string(v);
         // }
         // if let Some(v) = value.remove(NUL) {
-        //     di.nul = as_bool2(v);
+        //     di.nul = as_bool(v);
         // }
 
         for (k, v) in value {
@@ -366,23 +366,23 @@ impl From<HashMap<String, AttributeValue>> for DataItem {
                 }
                 // node type item - maybe removed
                 GRAPH => {
-                    di.graph = as_string2(v);
+                    di.graph = as_string(v);
                 }
                 ISNODE => {
-                    di.is_node = as_bool2(v);
+                    di.is_node = as_bool(v);
                 }
                 IX => {
-                    di.ix = as_string2(v);
+                    di.ix = as_string(v);
                 } // used during double-propagation load "X": not processed, "Y": processed
                 // scalars
-                N => di.n = as_string2(v),
-                P => di.p = as_string2(v),
-                S => di.s = as_string2(v),
-                BL => di.bl = as_bool2(v),
+                N => di.n =  as_n(v), 
+                P => di.p = as_string(v),
+                S => di.s = as_string(v),
+                BL => di.bl = as_bool(v),
                 B => di.b = as_blob2(v),
-                DT => di.dt = as_string2(v), // DateTime
-                TY => di.ty = as_string2(v), // type of node (stored with each scalar item)
-                E => di.e = as_string2(v),
+                DT => di.dt = as_string(v), // DateTime
+                TY => di.ty = as_string(v), // type of node (stored with each scalar item)
+                E => di.e = as_string(v),
                 // lists
                 LS => di.ls = as_ls2(v),
                 LN => di.ln = as_ln2(v),
@@ -474,17 +474,17 @@ impl From<HashMap<String, AttributeValue>> for AttrItem {
 
         for (k, v) in value.drain() {
             match k.as_str() {
-                "PKey" => item.nm = as_string2(v),
-                "SortK" => item.attr = as_string2(v),
-                "Ty" | "ty" => item.ty = as_string2(v),
+                "PKey" => item.nm = as_string(v),
+                "SortK" => item.attr = as_string(v),
+                "Ty" | "ty" => item.ty = as_string(v),
                 "f" => item.ty = None,
-                "C" => item.c = as_string2(v),
-                "P" => item.p = as_string2(v),
-                "Pg" => item.pg = as_bool2(v),
-                "N" => item.n = as_bool2(v),
-                //"Cd" => item.cd = as_string2(v),
-                //"Sz" => item.sz = as_string2(v),
-                "Ix" => item.ix = as_string2(v),
+                "C" => item.c = as_string(v),
+                "P" => item.p = as_string(v),
+                "Pg" => item.pg = as_bool(v),
+                "N" => item.n = as_bool(v),
+                //"Cd" => item.cd = as_string(v),
+                //"Sz" => item.sz = as_string(v),
+                "Ix" => item.ix = as_string(v),
                 "IncP" => println!("IncP not used..."),
                 &_ => panic!("unexpected attribute name in AttrItem From impl [{}]", k),
             }

@@ -180,6 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
     // ==============================================================
     println!("parent_node count {}",parent_node.len());
     for puid in parent_node   {
+    
+        // TODO: fetch from test_childedge to reduce memory consumption
 
         let mut sk_edges = match parent_edges.remove(&puid) {
             None => {
@@ -200,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
         // =====================================================================
         println!("fetch_node_type...");
         let p_node_ty = fetch_node_type(&dyn_client, &puid, &graph_sn, &node_types_).await;
+        println!("parent node_type {}",p_node_ty.long_nm());
         let Some(p_11_edges) = ty_with_ty_11.get(p_node_ty) else { continue }; //Person contains Performance (is_11)
         println!("p_11_edges {}",p_11_edges.len());
 
@@ -243,8 +246,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
         for &p_11_edge in p_11_edges { // Performance, . . 
 
                 let p_11_edge_sk = p_sk_prefix.clone() + p_11_edge.c.as_str();         // "m|A#G#:A";
+                
+                println!("p_11_edge_sk [{}]",p_11_edge_sk);
 
-                let Some(c_uids) = sk_edges.remove(&types::SortK::new(&p_11_edge_sk)) else {panic!("{} not found in sk_edges",&p_11_edge_sk)};
+                let Some(c_uids) = sk_edges.remove(&types::SortK::new(&p_11_edge_sk)) 
+                    else {  for (k,_) in sk_edges {
+                                println!("sk_edegs key {:?}",k)
+                            }
+                            panic!("{} not found in sk_edges",&p_11_edge_sk)
+                        };
 
                 // child type
                 let c_type = node_types_.get(&p_11_edge.ty);        // Performance
@@ -266,7 +276,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                                 }   
                                             };
 
-                
+                println!("c_sk_query [{:?}]",c_sk_query);
                 
                 // propagate Nd data and scalar data of each edge
                 for c_uid in c_uids {
@@ -276,6 +286,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
 
                     // load cache with results of c_sk_query sortks .
                     for c_sk in &c_sk_query {
+                    
+                        println!("c_sk [{}]",&c_sk);
 
                         // perform query on cuid, query_sk
                         let result = dyn_client
@@ -316,8 +328,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                 for &pg_11_edge in  v { // 1:1 attrs for Performance (Actor,Character,Film)
 
                         let pg_sk_base = p_11_edge_sk.clone() + "#G#:" + pg_11_edge.c.as_str();               
-
-                        let Some(di) = nc_attr_map.0.remove(&pg_sk_base[..]) else {
+                        println!("pg_11_edge.c.as_str() [{}]    pg_sk_base [{}]",pg_11_edge.c.as_str(), pg_sk_base);
+                        
+                        let Some(di) = nc_attr_map.0.remove(pg_11_edge.c.as_str()) else {
+                                for (k,_) in nc_attr_map.0 {
+                                    println!("nc_attr_map key {}",k)
+                                }
                                 panic!("not found in nc_attr_map [{}]", pg_sk_base);
                         };
 
@@ -513,7 +529,6 @@ async fn fetch_node_type<'a, T: Into<String>>(
         None => panic!("No type item found in fetch_node_type() for [{}]", uid),
         Some(v) => v.into(),
     };
-    println!("node_type {}",nd.long_nm());
-    node_types.get(&nd.long_nm())
+    node_types.get(&nd.short_nm())
 }
    
