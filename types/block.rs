@@ -1,17 +1,17 @@
 #![warn(unused_variables)]
 #![warn(dead_code)]
 use super::{
-    as_blob2, as_bool,  as_float2, as_i16, as_i16_2, as_i32_2, as_i8_2, as_int2, as_lb2,
-    as_lblob2, as_lbool2, as_ldt2, as_lfloat2, as_li16_2, as_li32_2, as_li8_2, as_lint2, as_ln2,
-    as_ls2, as_luuid, as_string, as_uuid, as_vi32, as_vi8, as_n,
+    as_blob2, as_bool, as_float2, as_i16, as_i16_2, as_i32_2, as_i8_2, as_int2, as_lb2, as_lblob2,
+    as_lbool2, as_ldt2, as_lfloat2, as_li16_2, as_li32_2, as_li8_2, as_lint2, as_ln2, as_ls2,
+    as_luuid, as_n, as_string, as_uuid, as_vi32, as_vi8,
 };
 use aws_sdk_dynamodb::types::AttributeValue;
-use std::{any::Any, collections::HashMap};
 use std::str::FromStr;
 #[warn(non_camel_case_types)]
 //#[allow(non_camel_case_types)]
 //#[warn(dead_code)]
 use std::sync::Arc;
+use std::{any::Any, collections::HashMap};
 //mod block {. // do not include in mod definition file
 use std::time;
 use uuid::{self, Uuid}; //, as_vec_string};
@@ -47,7 +47,7 @@ pub const SBL: &str = "SBL";
 // Edge
 pub const CNT: &str = "N"; // edge count
 pub const ND: &str = "nd";
-pub const BID: &str = "id";       // try changing attribute name from Id to Bid
+pub const BID: &str = "id"; // try changing attribute name from Id to Bid
 pub const XF: &str = "xf";
 // Propagated Scalars, scalar lists (determined by SK value)
 pub const LS: &str = "LS";
@@ -108,16 +108,15 @@ pub struct DataItem {
     pub is_node: Option<bool>,
     pub ix: Option<String>, // used during double-propagation load "X": not processed, "Y": processed
     // scalar types
-
     pub n: Option<String>, // number type. No conversion from db storage format. Used for bulk loading operations only.
-    pub f: Option<f64>,           // Nullable type has None for Null values
-    pub i: Option<i64>,           // Nullable type has None for Null values  
-    
-    pub s: Option<String>, // string
-    pub bl: Option<bool>,  // boolean
+    pub f: Option<f64>,    // Nullable type has None for Null values
+    pub i: Option<i64>,    // Nullable type has None for Null values
+
+    pub s: Option<String>,  // string
+    pub bl: Option<bool>,   // boolean
     pub b: Option<Vec<u8>>, // byte array
     pub dt: Option<String>, // DateTime
-    pub p: Option<String>, // attribute name as used in P_S, P_N, P_B global indexes
+    pub p: Option<String>,  // attribute name as used in P_S, P_N, P_B global indexes
     pub ty: Option<String>, // type of node long name [and attribute e.g. Pf#N>, P#D (persisted in db>, alternative to cache)
     //    pub tya : Option<String>,         // item (attribute) type short name>, I>, F>, S, SS, B, SB etc telss From(below) hos to interpret dataitem
     pub e: Option<String>, // used for attributes populating ElasticSearch
@@ -160,8 +159,8 @@ impl DataItem {
             is_node: None,
             ix: None,
             // scalars
-            i: None,    // internal, db uses attribute N
-            f: None,    // internal, db uses attribute N
+            i: None, // internal, db uses attribute N
+            f: None, // internal, db uses attribute N
             n: None, // copy of N - useful when no conversion is necessary
             s: None,
             bl: None,
@@ -375,7 +374,7 @@ impl From<HashMap<String, AttributeValue>> for DataItem {
                     di.ix = as_string(v);
                 } // used during double-propagation load "X": not processed, "Y": processed
                 // scalars
-                N => di.n =  as_n(v), 
+                N => di.n = as_n(v),
                 P => di.p = as_string(v),
                 S => di.s = as_string(v),
                 BL => di.bl = as_bool(v),
@@ -518,7 +517,7 @@ impl AttrD {
             name: String::new(),
             dt: String::new(),
             c: String::new(),
-            ty: String::new(),  // edge only attr: child type long name
+            ty: String::new(), // edge only attr: child type long name
             p: String::new(),
             nullable: false, // true: nullable (attribute may not exist) false: not nullable
             pg: true,        // true: propagate scalar data to parent
@@ -535,7 +534,7 @@ impl AttrD {
     //     sk.push_str(self.c);
     //     sk.push_str("#G#");
     //     let attr_11 : Vec<AttrD> = self.filter(|&block::AttrD{card: x, ..}| x == "1:1" ).collect();
-    //     for k in get_ty_11 { 
+    //     for k in get_ty_11 {
     //         sk.push_str(get_scalar_sk(self.ty))
     //     }
     // }

@@ -13,11 +13,11 @@ pub use block::{
 use std::collections::{HashMap, HashSet};
 //use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
 use std::iter::IntoIterator;
 use std::slice::Iter;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::hash::{Hash, Hasher};
 
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::AttributeValue;
@@ -64,32 +64,30 @@ use uuid::{self, Builder, Uuid}; //, as_vec_string};
 
 // aws_sdk_dynamodb type conversion from AttributeValue to Rust type
 
-
 pub fn as_string(val: AttributeValue) -> Option<String> {
     match val {
-       AttributeValue::S(s) => Some(s),
-       AttributeValue::Null(b) => { 
+        AttributeValue::S(s) => Some(s),
+        AttributeValue::Null(b) => {
             if b == false {
                 panic!("Got Null with bool of false")
             }
             None
-        },
-       _ => panic!("as_string(): Expected AttributeValue::S or ::NULL"),
+        }
+        _ => panic!("as_string(): Expected AttributeValue::S or ::NULL"),
     }
 }
 
 pub fn as_n(val: AttributeValue) -> Option<String> {
     match val {
-       AttributeValue::N(s) => Some(s),
-       AttributeValue::Null(b) => { 
+        AttributeValue::N(s) => Some(s),
+        AttributeValue::Null(b) => {
             if b == false {
                 panic!("Got Null with bool of false")
             }
             None
-          },
-       _ => panic!("as_n(): Expected AttributeValue::N or ::NULL"),
+        }
+        _ => panic!("as_n(): Expected AttributeValue::N or ::NULL"),
     }
-
 }
 
 pub fn as_dt2(val: AttributeValue) -> Option<String> {
@@ -254,16 +252,17 @@ pub fn as_li2(val: AttributeValue) -> Option<Vec<i64>> {
 pub fn as_bool(val: AttributeValue) -> Option<bool> {
     match val {
         AttributeValue::Bool(bl) => Some(bl),
-        AttributeValue::Null(bl) =>  {
+        AttributeValue::Null(bl) => {
             if bl == false {
                 panic!("Got Null with bool of false")
             }
             None
-          },
-         _ => { panic!("as_bool(): Expected AttributeValue::Bool or ::Null") },
+        }
+        _ => {
+            panic!("as_bool(): Expected AttributeValue::Bool or ::Null")
+        }
     }
 }
-
 
 pub fn as_blob2(val: AttributeValue) -> Option<Vec<u8>> {
     if let AttributeValue::B(blob) = val {
@@ -555,20 +554,20 @@ pub fn as_ldt2(val: AttributeValue) -> Option<Vec<Option<String>>> {
 pub struct SortK(String);
 
 impl SortK {
-    pub fn new(s:&str) -> SortK {
+    pub fn new(s: &str) -> SortK {
         SortK(s.to_owned())
     }
     pub fn get_attr_sn(&self) -> &str {
-        &self.0[self.0.rfind('#').unwrap()+1..]
+        &self.0[self.0.rfind('#').unwrap() + 1..]
     }
     pub fn get_partition(&self) -> &str {
         let p = &self.0[..self.0.rfind('#').unwrap()];
-        &p[p.rfind('#').unwrap()+1..]
+        &p[p.rfind('#').unwrap() + 1..]
     }
 }
 
 impl From<String> for SortK {
-    fn from(u:String) -> SortK {
+    fn from(u: String) -> SortK {
         SortK::new(&u[..])
     }
 }
@@ -646,7 +645,6 @@ impl Hash for NodeType {
         self.long.hash(state);
     }
 }
-
 
 impl NodeType {
     fn new() -> Self {
@@ -755,11 +753,15 @@ impl NodeType {
     }
 
     pub fn edge_cnt(&self) -> usize {
-        self.into_iter().filter(|&v| v.dt == "Nd").fold(0,|n,_| n+1)
+        self.into_iter()
+            .filter(|&v| v.dt == "Nd")
+            .fold(0, |n, _| n + 1)
     }
 
     pub fn get_11(&self) -> Vec<&block::AttrD> {
-        self.into_iter().filter(|&block::AttrD{card: x, ..}| x == "1:1" ).collect()
+        self.into_iter()
+            .filter(|&block::AttrD { card: x, .. }| x == "1:1")
+            .collect()
     }
 }
 
@@ -773,19 +775,17 @@ impl From<HashMap<String, AttributeValue>> for NodeType {
                 "PKey" => {}
                 "SortK" => ty.short = as_string(v).unwrap(),
                 "Name" => ty.long = as_string(v).unwrap(),
-                "Reference" => {
-                            match as_bool(v) {
-                                Some(bl) => {ty.reference=bl},
-                                None => {panic!("From AV for NodeType expected bool got None")}
-                            }
-                        },
-                "OvBs" => {},
-                "Ty" => {
-                        match as_string(v) {
-                            Some(s) => {ty.short=s},
-                            None => panic!("From AV for NodeType Ty, expected string got Null")
-                        }
-                        },
+                "Reference" => match as_bool(v) {
+                    Some(bl) => ty.reference = bl,
+                    None => {
+                        panic!("From AV for NodeType expected bool got None")
+                    }
+                },
+                "OvBs" => {}
+                "Ty" => match as_string(v) {
+                    Some(s) => ty.short = s,
+                    None => panic!("From AV for NodeType Ty, expected string got Null"),
+                },
                 _ => panic!("NodeType from impl: unexpected attribute got [{}]", k),
             }
         }
@@ -828,31 +828,38 @@ impl<'a> NodeTypes {
         //Error::Err("get error: Node type [{}] not found",ty_nm);
     }
 
-        //                                    Types containing 11 attrs        Types containing types that contain 11.
-        pub fn get_types_with_11_types(&self) -> (HashMap<&NodeType, Vec<&block::AttrD>>, HashMap<&NodeType, Vec<&block::AttrD>>) {
-            let mut ty_with_11: HashMap<&NodeType, Vec<&block::AttrD>>  = HashMap::new();
-            let mut ty_with_ty_11 : HashMap<&NodeType, Vec<&block::AttrD>>  = HashMap::new();
-            
-            //self.0.iter().get_11().iter().filter(|&v| v.len() > 0).map(|&v| ty_with_11.insert(v.long)) 
-            
-            for t in self.0.iter() {
-                let c = t.get_11();
-                if c.len() > 0 {
-                    ty_with_11.insert(t,c);
-                }
+    //                                    Types containing 11 attrs        Types containing types that contain 11.
+    pub fn get_types_with_11_types(
+        &self,
+    ) -> (
+        HashMap<&NodeType, Vec<&block::AttrD>>,
+        HashMap<&NodeType, Vec<&block::AttrD>>,
+    ) {
+        let mut ty_with_11: HashMap<&NodeType, Vec<&block::AttrD>> = HashMap::new();
+        let mut ty_with_ty_11: HashMap<&NodeType, Vec<&block::AttrD>> = HashMap::new();
+
+        //self.0.iter().get_11().iter().filter(|&v| v.len() > 0).map(|&v| ty_with_11.insert(v.long))
+
+        for t in self.0.iter() {
+            let c = t.get_11();
+            if c.len() > 0 {
+                ty_with_11.insert(t, c);
             }
-            for node_ty in self.0.iter() {
-                for a in node_ty {
-                    for (&k,_) in &ty_with_11 {
-                        if a.ty == k.long_nm() {
-                            ty_with_ty_11.entry(node_ty).and_modify(|v|v.push(a)).or_insert(vec![a]);
-                        }
+        }
+        for node_ty in self.0.iter() {
+            for a in node_ty {
+                for (&k, _) in &ty_with_11 {
+                    if a.ty == k.long_nm() {
+                        ty_with_ty_11
+                            .entry(node_ty)
+                            .and_modify(|v| v.push(a))
+                            .or_insert(vec![a]);
                     }
                 }
             }
-            (ty_with_ty_11, ty_with_11)
         }
-
+        (ty_with_ty_11, ty_with_11)
+    }
 }
 
 pub async fn fetch_graph_types(
@@ -862,7 +869,7 @@ pub async fn fetch_graph_types(
 ) -> Result<(Arc<NodeTypes>, String), aws_sdk_dynamodb::Error> {
     let mut ty_c_: HashMap<String, block::AttrBlock> = HashMap::new();
     let table_name = "GoGraphSS";
-    println!("Fetch Fetch Graph Short Name ....[{}]",&graph);
+    println!("Fetch Fetch Graph Short Name ....[{}]", &graph);
     // ================================================================
     // Fetch Graph Short Name (used as prefix in some PK values)
     // ================================================================
@@ -956,52 +963,52 @@ pub async fn fetch_graph_types(
 
         let ty_ = v.ty.clone().unwrap();
 
-        let a : block::AttrD = if ty_[0..1].contains('[') {
-                        // equiv: *v.ty.index(0..1).   Use of Index trait which has generic that itself is a SliceIndex trait which uses Ranges...
-                        block::AttrD {
-                            name: v.attr.unwrap(), // TODO: v.clone_attr(),v.get_attr()
-                            dt: "Nd".to_string(),
-                            c: v.c.unwrap(),
-                            ty: ty_[1..ty_.len() - 1].to_string(), //nm.clone(), //"XX".to_string(),// v.ty.unwrap()[1..v.ty.unwrap().len() - 1].to_string(),
-                            p: v.p.unwrap(),
-                            pg: v.pg.unwrap_or(false),
-                            nullable: v.n.unwrap_or(false),
-                            //incP: v.incp,
-                            ix: v.ix.unwrap_or(String::new()),
-                            card: "1:N".to_string(),
-                        }
-                    } else {
-                        // check if Ty is a tnown Type
-                        if set.contains(&ty_) {
-                            block::AttrD {
-                                name: v.attr.unwrap(),
-                                dt: "Nd".to_string(),
-                                c: v.c.unwrap(),
-                                ty: ty_,
-                                p: v.p.unwrap(),
-                                pg: v.pg.unwrap_or(false),
-                                nullable: v.n.unwrap_or(false),
-                                //incp: v.incp,
-                                ix: v.ix.unwrap_or(String::new()),
-                                card: "1:1".to_string(),
-                            }
-                        } else {
-                            // scalar
-                            block::AttrD {
-                                name: v.attr.unwrap(),
-                                dt: v.ty.unwrap(),
-                                c: v.c.unwrap(),
-                                p: v.p.unwrap(),
-                                nullable: v.n.unwrap_or(false),
-                                pg: v.pg.unwrap_or(false),
-                                //incp: v.incp,
-                                ix: v.ix.unwrap_or(String::new()),
-                                card: "".to_string(),
-                                ty: "".to_string(),
-                            }
-                        }
-                        //}
-                    };
+        let a: block::AttrD = if ty_[0..1].contains('[') {
+            // equiv: *v.ty.index(0..1).   Use of Index trait which has generic that itself is a SliceIndex trait which uses Ranges...
+            block::AttrD {
+                name: v.attr.unwrap(), // TODO: v.clone_attr(),v.get_attr()
+                dt: "Nd".to_string(),
+                c: v.c.unwrap(),
+                ty: ty_[1..ty_.len() - 1].to_string(), //nm.clone(), //"XX".to_string(),// v.ty.unwrap()[1..v.ty.unwrap().len() - 1].to_string(),
+                p: v.p.unwrap(),
+                pg: v.pg.unwrap_or(false),
+                nullable: v.n.unwrap_or(false),
+                //incP: v.incp,
+                ix: v.ix.unwrap_or(String::new()),
+                card: "1:N".to_string(),
+            }
+        } else {
+            // check if Ty is a tnown Type
+            if set.contains(&ty_) {
+                block::AttrD {
+                    name: v.attr.unwrap(),
+                    dt: "Nd".to_string(),
+                    c: v.c.unwrap(),
+                    ty: ty_,
+                    p: v.p.unwrap(),
+                    pg: v.pg.unwrap_or(false),
+                    nullable: v.n.unwrap_or(false),
+                    //incp: v.incp,
+                    ix: v.ix.unwrap_or(String::new()),
+                    card: "1:1".to_string(),
+                }
+            } else {
+                // scalar
+                block::AttrD {
+                    name: v.attr.unwrap(),
+                    dt: v.ty.unwrap(),
+                    c: v.c.unwrap(),
+                    p: v.p.unwrap(),
+                    nullable: v.n.unwrap_or(false),
+                    pg: v.pg.unwrap_or(false),
+                    //incp: v.incp,
+                    ix: v.ix.unwrap_or(String::new()),
+                    card: "".to_string(),
+                    ty: "".to_string(),
+                }
+            }
+            //}
+        };
 
         let mut nm = v.nm.unwrap();
         nm.drain(0..nm.find('.').unwrap() + 1);
