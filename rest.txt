@@ -1,0 +1,298 @@
+                        // for (i,ouid) in ovbs.enumerate() {
+
+                        //         let bid = bids[i];
+          
+                        //         tokio::spawn(async move {
+
+                        //             let id = 1;
+                        //             for id < bid {
+
+                        //                 let batch_sk=p_edge_11_sk.clone() + "%" + id.to_string();
+                        //                  id+=1;
+
+                        //                 cuids = fetch_child_nodes_ovb(&dyn_client, ouid, batch_sk, table_name);
+                                        
+
+                        //                 // =================================================================================
+                        //                 // for each 1:1 edge in child (Actor,Genre,Character), query the scalar propagated data
+                        //                 // =================================================================================
+
+                        //                 let mut items: HashMap<String, DpPropagate> = HashMap::new();
+                        //                 for c_uid in &cuids {
+                                        
+                        //                     println!("----------- ovb uuid [{}] ---------",c_uid.to_string());
+                        //                     // note: actual scalar query not performed on node containing scalar data but on propagated data contained
+                        //                     // in immediate child of parent node, hence the use of edge sortk based values.
+                        //                     // how many 11 edges  - basis of sortk for child query
+                        //                     let p_edge_11_c_ty = node_types.get(&p_edge_11.ty); // e.g. Performance 1:1 edge - in parent Person
+                        //                     // 11 edges on child node (e.g. Performance) which must have 1:1 attributes, e.g. Actor,Genre,Character
+                        //                     let Some(pg_11_edges) = ty_with_11.get(&p_edge_11_c_ty) else {
+                        //                         panic!("logic error: expected type {:?} in ty_with_11", p_edge_11_c_ty )
+                        //                     };
+                                                                            
+                        //                     // allocate node cache for one or more 1:1 edges in child node
+                        //                     let mut node_cache: types::NodeCache = types::NodeCache(HashMap::new());
+                        //                     // ===========================================================
+                        //                     // query each 1:1 child edge [Character, Genre, Actor]
+                        //                     // ===========================================================
+                        //                     for pg_11_edge_ in pg_11_edges {
+
+                        //                         let pg_11_edge = pg_11_edge_.clone();
+                                            
+                        //                         let pg_11_edge_cache_key = sk_base.clone() + pg_11_edge.c.as_str();
+                        //                         println!("========== pg_11_edge_ [{}] ==========",pg_11_edge_cache_key);
+                                                
+                        //                         if !node_cache.0.contains_key(&pg_11_edge_cache_key) {
+                        //                             // ===========================================================
+                        //                             // populate node cache using one or more sortk queries.
+                        //                             // ===========================================================
+                        //                             // total edges on child type 
+                        //                             let c_all_edges = p_edge_11_c_ty.edge_cnt();
+                        //                             // 11 edges only
+                        //                             let pg_11_edges_cnt= pg_11_edges.len();
+                        //                             // populate c_sk_query with a general edge value of specific edge
+                        //                             //let c_sk_query=vec![sk_base.clone() + pg_11_edge.c.as_str()];
+                        //                             // below will handle case of many 11 edges on child - reading in multiple edges - maybe not a good idea
+                        //                             // given each edge might contain a lot of data however query will only read edge item not Ovb 
+                        //                             let c_sk_query = if pg_11_edges_cnt == 1 {
+                        //                                 vec![sk_base.clone() + pg_11_edge.c.as_str()]
+                        //                             } else {
+                        //                                 match c_all_edges > pg_11_edges_cnt * EDGE_MULTIPLY_THRESHOLD {
+                        //                                     true => {
+                        //                                         // use multiple specific SKs
+                        //                                         let mut v_sk = vec![];
+                        //                                         for e in pg_11_edges {
+                        //                                             v_sk.push(sk_base.clone() + e.c.as_str())
+                        //                                         }
+                        //                                         v_sk
+                        //                                     }
+                        //                                     false => vec![sk_base.clone()], // global edge sk query "m|A#G#" - contains propagated scalar data
+                        //                                 }
+                        //                             };
+                    
+                        //                             println!("c_sk_query [{:?}]", c_sk_query);
+                        //                             for c_sk in &c_sk_query {
+                    
+                        //                                 println!("c_sk [{}]", &c_sk);
+                    
+                        //                                 // perform query on cuid, query_sk
+                        //                                 let result = dyn_client
+                        //                                             .query()
+                        //                                             .table_name(table_name)
+                        //                                             .key_condition_expression(
+                        //                                                 "#p = :uid and begins_with(#s,:sk_v)",
+                        //                                             )
+                        //                                             .expression_attribute_names("#p", types::PK)
+                        //                                             .expression_attribute_names("#s", types::SK)
+                        //                                             .expression_attribute_values(
+                        //                                                 ":uid",
+                        //                                                 AttributeValue::B(Blob::new(c_uid.as_bytes())),
+                        //                                             )
+                        //                                             .expression_attribute_values(
+                        //                                                 ":sk_v",
+                        //                                                 AttributeValue::S(c_sk.clone()),
+                        //                                             )
+                        //                                             .send()
+                        //                                             .await;
+                    
+                        //                                 if let Err(err) = result {
+                        //                                     panic!("error in query() {}", err);
+                        //                                 }
+                        //                                 let mut q: Vec<types::DataItem> = vec![];
+                    
+                        //                                 if let Some(items) = result.unwrap().items {
+                        //                                     q = items.into_iter().map(|v| v.into()).collect();
+                        //                                 }
+                    
+                        //                                 for c in q {
+                        //                                     node_cache.0.insert(c.sk.0.clone(), c);
+                        //                                 }
+                        //                             }
+                        //                             for (k, v) in &node_cache.0 {
+                        //                                 println!("** cache: key [{}]  {:?}", k, v.sk)
+                        //                             }
+                        //                         }
+                                                
+                        //                         let nt = node_types.get(&pg_11_edge.ty);
+                        //                         println!(" nt = [{}]",nt.long_nm());
+                        //                         let pg_11_edge_scalars = nt.get_scalars_flatten();
+                        //                         println!(" pg_11_edge_scalars = [{:?}]",pg_11_edge_scalars);
+                                                
+                        //                         /*
+                        //                         double propagate Scalar - from child propagated source
+                        //                         */
+                        //                         for scalar in pg_11_edge_scalars {
+
+                        //                             // cached sk
+                        //                             let mut cpg_sk = sk_base.clone()
+                        //                                 + &pg_11_edge.c[..]
+                        //                                 + "#:"
+                        //                                 + &scalar.c;
+                        //                             // sk_base.clone() + edge_11_sn + "#:" + &scalar.short_nm();
+                        //                             println!("=== scalars : {}",cpg_sk);
+                                                    
+                        //                             let di = match node_cache.0.remove(&cpg_sk[..]) {
+                        //                                 Some(di) => di,
+                        //                                 None => types::DataItem::new(),
+                        //                             };
+                        //                             let mut pg_sk = p_edge_11_sk.clone()
+                        //                                 + "#:"
+                        //                                 + &pg_11_edge.c[..]
+                        //                                 + "#:"
+                        //                                 + &scalar.c;
+                        //                             // let Some(di) = node_cache.0.remove(&pg_sk[..]) else {
+                        //                             //     panic!("Logic error: not found in node_cache [{}]", pg_sk);
+                        //                             // };
+
+                        //                             match scalar.dt.as_str() {
+                        //                                         // edge predicate (uuidpred)
+                        //                                         "I" | "F" => match di.ln {
+                        //                                             Some(mut vv) => match vv.remove(0) {
+                        //                                                 Some(s) => match items.get_mut(&pg_sk) {
+                        //                                                     None => {
+                        //                                                         items.insert(
+                        //                                                             pg_sk.clone(),
+                        //                                                             DpPropagate {
+                        //                                                                 entry: Some(LN),
+                        //                                                                 psk: p_edge_11_sk.clone(),
+                        //                                                                 nd: vec![],
+                        //                                                                 ls: vec![],
+                        //                                                                 ln: vec![AttributeValue::N(s)],
+                        //                                                                 lbl: vec![],
+                        //                                                                 lb: vec![],
+                        //                                                                 ldt: vec![],
+                        //                                                             },
+                        //                                                         );
+                        //                                                     },
+                        //                                                     Some(v) =>  v.ln.push(AttributeValue::N(s)),
+                                                                                                        
+                        //                                                 },
+                        //                                                 _ => panic!(
+                        //                                                     "expected Some got None in cache for I or F type"
+                        //                                                 ),
+                        //                                             },
+                        //                                             _ => {
+                        //                                                 panic!(
+                        //                                                     "Data Error: Attribute {} in type {} has no value",
+                        //                                                     pg_11_edge.c,
+                        //                                                     p_edge_11_c_ty.long_nm()
+                        //                                                 )
+                        //                                             },
+                        //                                         },
+                        //                                         "S" => {
+                        //                                             match di.ls {
+                        //                                                 Some(mut vv) => match vv.remove(0) {
+                        //                                                     Some(s) => match items.get_mut(&pg_sk) {
+                        //                                                         None => {
+                        //                                                             items.insert(
+                        //                                                                 pg_sk.clone(),
+                        //                                                                 DpPropagate {
+                        //                                                                     entry:  Some(LS),
+                        //                                                                     psk: p_edge_11_sk.clone(),
+                        //                                                                     nd: vec![],
+                        //                                                                     ls: vec![AttributeValue::S(s)],
+                        //                                                                     ln: vec![],
+                        //                                                                     lbl: vec![],
+                        //                                                                     lb: vec![],
+                        //                                                                     ldt: vec![],
+                        //                                                                 },
+                        //                                                             );
+                        //                                                         }
+                        //                                                         Some(v) => v.ls.push(AttributeValue::S(s)),
+                        //                                                     },
+                        //                                                     _ => panic!(
+                        //                                                         "expected Some got None in cache for Stype"
+                        //                                                     ),
+                        //                                                 },
+                        //                                                 _ => {
+                        //                                                     println!("Data Error: Attribute {} in type {} has no value",pg_11_edge.c,p_edge_11_c_ty.long_nm())
+                        //                                                 },
+                        //                                             }
+                        //                                         }
+                        //                                         "Bl" => {
+                        //                                             match di.lbl {
+                        //                                                 Some(vv) => match vv[0] {
+                        //                                                     Some(bl) => match items.get_mut(&pg_sk) {
+                        //                                                         None => {
+                        //                                                             items.insert(
+                        //                                                                 pg_sk.clone(),
+                        //                                                                 DpPropagate {
+                        //                                                                     entry: Some(LBL),
+                        //                                                                     psk: p_edge_11_sk.clone(),
+                        //                                                                     nd: vec![],
+                        //                                                                     ls: vec![],
+                        //                                                                     ln: vec![],
+                        //                                                                     lbl: vec![AttributeValue::Bool(bl)],
+                        //                                                                     lb: vec![],
+                        //                                                                     ldt: vec![],
+                        //                                                                 },
+                        //                                                             );
+                        //                                                         }
+                        //                                                         Some(v) => v.lbl.push(AttributeValue::Bool(bl)),
+                        //                                                     },
+                        //                                                     _ => panic!(
+                        //                                                         "expected Some got None in cache for Bl type"
+                        //                                                     ),
+                        //                                                 },
+                        //                                                 _ => {
+                        //                                                     println!("Data Error: Attribute {} in type {} has no value",pg_11_edge.c,p_edge_11_c_ty.long_nm())
+                        //                                                 },
+                        //                                             }
+                        //                                         }
+                        //                                         "B" => {
+                        //                                             match di.lb {
+                        //                                                 Some(vv) => {
+                        //                                                     for s in vv {
+                        //                                                         match s {
+                        //                                                             Some(s) => {
+                        //                                                                 items.entry(pg_sk.clone())
+                        //                                                                     .and_modify( |n| n.lb.push(AttributeValue::B(Blob::new(s.clone()))))
+                        //                                                                     .or_insert(
+                        //                                                                         DpPropagate {
+                        //                                                                             entry: Some(LB),
+                        //                                                                             psk: p_edge_11_sk.clone(),
+                        //                                                                             nd: vec![],
+                        //                                                                             ls: vec![],
+                        //                                                                             ln: vec![],
+                        //                                                                             lbl: vec![],
+                        //                                                                             lb: vec![AttributeValue::B(Blob::new(s.clone()))],
+                        //                                                                             ldt: vec![],
+                        //                                                                         }
+                        //                                                                     );
+                        //                                                             },
+                        //                                                             _ => panic!("expected Some got None in cache for B type"),                                                 
+                        //                                                         }
+                        //                                                     }
+                        //                                                 }
+                        //                                                 _ => {
+                        //                                                     println!("Data Error: Attribute {} in type {} has no value",pg_11_edge.c,p_edge_11_c_ty.long_nm())
+                        //                                                 }
+                        //                                             }
+                        //                                         }
+                        //                                         "Nd" => {}
+                        //                                         _ => {
+                        //                                             panic!(
+                        //                                                 "Unhandled match: got {} in match of dt",
+                        //                                                 pg_11_edge.dt.as_str()
+                        //                                             )
+                        //                                         }
+                        //                             } // match
+                        //                         }
+                        //                     }
+                        //                 }
+                        //             }
+                        //             // ========================================================================
+                        //             // 9.2.3 for each 11 edge in child node persist propagated scalar data 
+                        //             // =========================================================================
+                        //             persist(
+                        //                         &dyn_client,
+                        //                         puid,
+                        //                         &retry_ch,
+                        //                         &task_ch,
+                        //                         &ovb_pk,
+                        //                         items,
+                        //                         table_name,
+                        //             )
+                        //             .await;
+                        //         });
+                        //     }

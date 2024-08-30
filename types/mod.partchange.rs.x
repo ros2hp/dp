@@ -5,9 +5,9 @@ pub mod block;
 // export block types
 //pub use block::{ DataItem, NodeBlock};
 pub use block::{
-    DataItem, NodeCache, B, BID, BL, CHILD, CHILD_DETACHED, CHILD_INUSE, CNT, DT, GRAPH, ISNODE,
-    IX, LB, LBL, LN, LS, N, ND, OP, OVB, OVB_, OVB_INUSE, OVB_THRESHOLD_HIT, P, PARENT, PK, S, SB,
-    SK, SK_, SN, SS, TUID, TY, TYIX, XF,
+    DataItem, NodeCache, B, BID, BL, CNT, DT, GRAPH, ISNODE, IX, LB, LBL, LN, LS, N, ND, OP, OVB, P,
+    PARENT, PK, S, SB, SK, SK_, SN, SS, TUID, TY, XF, TYIX,
+    CHILD,CHILD_INUSE,CHILD_DETACHED,OVB_,OVB_INUSE,OVB_THRESHOLD_HIT,
 };
 
 #[macro_use]
@@ -609,6 +609,7 @@ impl From<HashMap<String, AttributeValue>> for Prefix {
     }
 }
 
+
 #[derive(Debug)]
 pub struct NodeType {
     // previous name TyName
@@ -621,10 +622,10 @@ pub struct NodeType {
 }
 
 impl<'a> IntoIterator for &'a NodeType {
-    type Item = &'a block::AttrD;
-    type IntoIter = Iter<'a, block::AttrD>;
+    type Item = &'a Arc<block::AttrD>;
+    type IntoIter = Iter<'a, Arc<block::AttrD>>;
 
-    fn into_iter(self) -> Iter<'a, block::AttrD> {
+    fn into_iter(self) -> Iter<'a, Arc<block::AttrD>> {
         if let None = self.attrs {
             println!(
                 "IntoIterator error: type {} [{}] has no attrs",
@@ -737,9 +738,7 @@ impl NodeType {
     }
 
     pub fn get_scalars_flatten(&self) -> Vec<&block::AttrD> {
-        self.into_iter()
-            .filter(|&v| v.dt != ND && v.pg)
-            .collect::<Vec<&block::AttrD>>()
+        self.into_iter().filter(|&&v| v.dt != ND && v.pg).collect::<Vec<&block::AttrD>>()
     }
 
     pub fn get_edge_child_ty(&self, edge: &str) -> &str {
@@ -797,8 +796,7 @@ impl NodeType {
 
     pub fn get_11(&self) -> Vec<block::AttrD> {
         self.into_iter()
-            .filter(|&block::AttrD { card: x, .. }| x == "1:1")
-            .map(|v| v.clone())
+            .filter(|&block::AttrD { card: x, .. }| x == "1:1").map(|v|v.clone())
             .collect()
     }
 }
@@ -834,6 +832,7 @@ impl From<HashMap<String, AttributeValue>> for NodeType {
 pub struct NodeTypes_(pub Vec<NodeType>);
 
 impl<'a> NodeTypes_ {
+
     pub fn set_attrs(&'a mut self, ty_nm: String, attrs: block::AttrBlock) {
         //-> Result<(),Error> {
 
@@ -850,6 +849,7 @@ impl<'a> NodeTypes_ {
             }
         }
         //Error::Err("get error: Node type [{}] not found",ty_nm
+
     }
 }
 
@@ -869,7 +869,8 @@ impl<'a> NodeTypes {
         }
         panic!("get error: Node type [{}] not found", ty_nm);
     }
-    //Error::Err("get error: Node type [{}] not found",ty_nm
+        //Error::Err("get error: Node type [{}] not found",ty_nm
+    
 
     // pub fn get_11_edge_scalars(&self, ty_nm: &str) -> HashMap<&str, Vec<&str>> {
     //     println!("get_11_edge_scalars for [{}]", ty_nm);
@@ -912,21 +913,19 @@ impl<'a> NodeTypes {
     pub fn get_types_with_11_types(
         &self,
     ) -> (
-        HashMap<Arc<NodeType>, Vec<Arc<block::AttrD>>>, // nodetype and its edges that point to a type containing 11 types e.g. Person -> Performance ->1:1-> Actor, G, Character
-        Arc<HashMap<Arc<NodeType>, Vec<Arc<block::AttrD>>>>,
+        HashMap<Arc<NodeType>, Arc<Vec<block::AttrD>>>, // nodetype and its edges that point to a type containing 11 types e.g. Person -> Performance ->1:1-> Actor, G, Character 
+        HashMap<Arc<NodeType>, Arc<Vec<block::AttrD>>>,
     ) {
         let mut ty_with_11: HashMap<Arc<NodeType>, Vec<Arc<block::AttrD>>> = HashMap::new();
         let mut ty_with_ty_11: HashMap<Arc<NodeType>, Vec<Arc<block::AttrD>>> = HashMap::new();
+
+        //self.0.iter().get_11().iter().filter(|&v| v.len() > 0).map(|&v| ty_with_11.insert(v.long))
 
         for t in self.0.iter() {
             let tc = t.clone();
             let c = tc.get_11();
             if c.len() > 0 {
-                let mut ac: Vec<Arc<block::AttrD>> = vec![];
-                for d in c {
-                    ac.push(Arc::new(d));
-                }
-                ty_with_11.insert(tc.clone(), ac);
+                ty_with_11.insert(tc.clone(), c);
             }
         }
         for t in self.0.iter() {
@@ -936,13 +935,13 @@ impl<'a> NodeTypes {
                     if a.ty == k.long_nm() {
                         ty_with_ty_11
                             .entry(tc.clone())
-                            .and_modify(|v| v.push(Arc::new(a.clone())))
-                            .or_insert(vec![Arc::new(a.clone())]);
+                            .and_modify(| v| v.push(Arc::new(a)))
+                            .or_insert(vec![Arc::new(a)]);
                     }
                 }
             }
         }
-        (ty_with_ty_11, Arc::new(ty_with_11))
+        (ty_with_ty_11, ty_with_11)
     }
 }
 pub async fn fetch_graph_types(
@@ -999,9 +998,9 @@ pub async fn fetch_graph_types(
         .await?;
 
     let nt: Vec<NodeType> = if let Some(items) = results.items {
-        items.into_iter().map(|v| v.into()).collect()
+         items.into_iter().map(|v| v.into()).collect()
     } else {
-        vec![]
+         vec![]
     };
 
     // let nt: Vec<Arc<NodeType>> = if let Some(items) = results.items {
@@ -1103,9 +1102,9 @@ pub async fn fetch_graph_types(
 
         // group AttrD by v.nm (PK in query)
         if let Some(c) = ty_c_.get_mut(&nm[..]) {
-            c.0.push(a);
+            c.0.push(Arc::new(a));
         } else {
-            ty_c_.insert(nm, block::AttrBlock(vec![a]));
+            ty_c_.insert(nm, block::AttrBlock(vec![Arc::new(a)]));
         }
     }
     // repackage (& consume) ty_c_ into NodeTypes

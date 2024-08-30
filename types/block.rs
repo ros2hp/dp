@@ -13,7 +13,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{any::Any, collections::HashMap};
 //mod block {. // do not include in mod definition file
-use std::time;
 use uuid::{self, Uuid}; //, as_vec_string};
 
 //               Dynamo Attr
@@ -36,7 +35,7 @@ pub const BL: &str = "Bl";
 pub const B: &str = "B";
 pub const DT: &str = "DT";
 pub const P: &str = "P"; // attribute name feeds P_S, P_N, P_? indexes
-pub const TY: &str = "ty"; // item type (GoGraph system type)
+pub const TY: &str = "Ty"; // item type (GoGraph system type)
                            //pub const TYA : &str = "TyA";           // attribute type/storage type .e.g LF, LI, LBl etc
 pub const E: &str = "E";
 // scalar sets
@@ -45,10 +44,11 @@ pub const SN: &str = "SN";
 pub const SS: &str = "SS";
 pub const SBL: &str = "SBL";
 // Edge
-pub const CNT: &str = "N"; // edge count
-pub const ND: &str = "nd";
-pub const BID: &str = "id"; // try changing attribute name from Id to Bid
-pub const XF: &str = "xf";
+pub const CNT: &str = "Cnt"; // edge count
+pub const ND: &str = "Nd";
+pub const BID: &str = "Bid"; // Batch id in OvB otherwise 0
+pub const XF: &str = "Xf"; // how to interrupt value in Nd: child node, OvB node, deleted node, etc
+pub const OVB: &str = "OvB";
 // Propagated Scalars, scalar lists (determined by SK value)
 pub const LS: &str = "LS";
 pub const LN: &str = "LN";
@@ -59,6 +59,16 @@ pub const LDT: &str = "LDT";
 pub const OP: &str = "OP"; // overflow parent UUID
                            // reverse
 pub const TUID: &str = "TUID";
+pub const COMMENT: &str = "Comment";
+pub const TYIX: &str = "TyIx";
+
+// XF values
+pub const CHILD: i8 = 1;
+pub const CHILD_INUSE: i8 = 2;
+pub const CHILD_DETACHED: i8 = 3;
+pub const OVB_: i8 = 4;
+pub const OVB_INUSE: i8 = 5;
+pub const OVB_THRESHOLD_HIT: i8 = 6;
 
 #[derive(Debug)]
 pub struct SK_(pub String);
@@ -139,6 +149,7 @@ pub struct DataItem {
     pub nd: Option<Vec<Uuid>>, //uuid.UID // list of node UIDs>, overflow block UIDs>, oveflow index UIDs
     pub xf: Option<Vec<i8>>, // flag: used in uid-predicate 1 : c-UID>, 2 : c-UID is soft deleted>, 3 : ovefflow UID>, 4 : overflow block full
     pub bid: Option<Vec<i32>>, // current maximum overflow batch id.
+    pub ovb: Option<bool>,
     // overflow
     pub op: Option<Uuid>, // assoc Parent UUID
     // double propagation
@@ -150,7 +161,7 @@ impl DataItem {
     // ********************************
     // Null value represented by None
     // ********************************
-    fn new() -> Self {
+    pub fn new() -> Self {
         DataItem {
             pk: vec![], // try using zero values for type instead of using Option::None. see if this works.
             sk: SK_(String::new()),
@@ -190,6 +201,7 @@ impl DataItem {
             nd: None,
             xf: None,
             bid: None,
+            ovb: None,
             // overflow
             op: None,
             // reverse
@@ -418,6 +430,7 @@ impl From<HashMap<String, AttributeValue>> for DataItem {
                 OP => {
                     di.op = as_uuid(v);
                 } // parent UID in overflow blocks
+                OVB => {}
                 _ => panic!("unexpected attribute name in DataItem From impl [{}]", k),
             }
         }
@@ -425,7 +438,7 @@ impl From<HashMap<String, AttributeValue>> for DataItem {
     }
 }
 
-pub struct NodeMap(pub HashMap<String, DataItem>);
+pub struct NodeCache(pub HashMap<String, DataItem>);
 
 //=============== AttrItem  ========================================================
 
@@ -485,6 +498,7 @@ impl From<HashMap<String, AttributeValue>> for AttrItem {
                 //"Sz" => item.sz = as_string(v),
                 "Ix" => item.ix = as_string(v),
                 "IncP" => println!("IncP not used..."),
+                COMMENT => {}
                 &_ => panic!("unexpected attribute name in AttrItem From impl [{}]", k),
             }
         }
@@ -502,7 +516,7 @@ pub struct AttrD {
     pub name: String,   // Attribute Identfier
     pub dt: String, // Derived value. Attribute Data Type - Nd (for uid-pred attribute only), (then scalars) DT,I,F,S,LI,SS etc
     pub c: String,  // Attribute short identifier
-    pub ty: String, // For uid-pred only, the type it respresents e.g "Person"
+    pub ty: String, // For edge only, the type it represents e.g "Person"
     pub p: String,  // data partition (aka shard) containing attribute
     pub nullable: bool, // true: nullable (attribute may not exist) false: not nullable
     pub pg: bool,   // true: propagate scalar data to parent
