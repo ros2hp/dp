@@ -7,7 +7,7 @@ pub mod block;
 pub use block::{
     DataItem, NodeCache, B, BID, BL, CHILD, CHILD_DETACHED, CHILD_INUSE, CNT, DT, GRAPH, ISNODE,
     IX, LB, LBL, LN, LS, N, ND, OP, OVB, OVB_, OVB_INUSE, OVB_THRESHOLD_HIT, P, PARENT, PK, S, SB,
-    SK, SK_, SN, SS, TUID, TY, TYIX, XF,
+    SK, SK_, SN, SS, TUID, TY, TYIX, XF, TARGET, ID
 };
 
 #[macro_use]

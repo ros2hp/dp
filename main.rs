@@ -147,8 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
     // ===========================================
     // 7. Setup asynchronous tasks infrastructure
     // ===========================================
-    let mut tasks: usize = 0;
-    let (prod_ch, mut task_rx) = tokio::sync::mpsc::channel::<bool>(MAX_TASKS);
+    let mut node_tasks: usize = 0;
+    let (prod_ch, mut node_task_rx) = tokio::sync::mpsc::channel::<bool>(MAX_TASKS);
     // ====================================
     // 8. Setup retry failed writes channel
     // ====================================
@@ -241,13 +241,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                 let ty_with_11_ = ty_with_11.clone(); // Arc clone not a HashMap clone
                 let p_edges_11 = p_edges_11.clone();
                 let m_p_edges_11 = p_edges_11.clone();
-                tasks += 1; // concurrent task counter
+                let p_ty_ = p_ty.clone();
+                node_tasks += 1; // concurrent task counter
                 // ================================================================================
                 // 9. spawn task to process each puid which will propagate edge data fron child node
-                // =================================================================================
+                // =================================================================================       
                 tokio::spawn(async move {
                     let sk_base = graph_sn.clone() + "|A#G#:";
-                    println!("fetch_node_type...[{}]", puid.to_string());
+
 
                     // SortK          Executable
                     //--------        ---------------
@@ -301,6 +302,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                 .await;
                         let mut ovb_pk: HashMap<String, Vec<Uuid>> = HashMap::new();
                         ovb_pk.insert(p_edge_11_sk.clone(), ovbs.clone());
+                        println!("Embedded child nodes {}",cuids.len());
 
                         let mut dp_tasks = ovb_pk.len() + 1;
                         println!(" OvB ================== dp_tasks to wait for {}",ovbs.len());
@@ -316,20 +318,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                         let sk_base = sk_base.clone();
                         let m_sk_base = sk_base.clone();
                         let p_edge_11_ = p_edge_11.clone();
+                        let p_ty = p_ty_.clone();
+                        let puid_ = puid.clone();
+                        let p_edge_11_sk = p_edge_11_sk_.clone(); // Arc??
+                        let ovb_pk_ = ovb_pk.clone(); // Arc it??
 
-                        let (cuids, ovbs, bids) =
-                            fetch_child_nodes(&dyn_client, &puid, &p_edge_11_sk, table_name).await;
-                        let mut ovb_pk: HashMap<String, Vec<Uuid>> = HashMap::new();
-                        ovb_pk.insert(p_edge_11_sk.clone(), ovbs.clone());
-                        let ovb_pk_= ovb_pk.clone(); //TODO  Arc it
+                        // let (cuids, ovbs, bids) =
+                        //     fetch_child_nodes(&dyn_client, &puid, &p_edge_11_sk, table_name).await;
+                        // let mut ovb_pk: HashMap<String, Vec<Uuid>> = HashMap::new();
+                        // ovb_pk.insert(p_edge_11_sk.clone(), ovbs.clone());
+                        // let ovb_pk_= ovb_pk.clone(); //TODO  Arc it
 
                         // tasks created for embedded and OVB so reading of cuids executed in parallel
                         // First, start a task for Embedded uuids.
                         tokio::spawn(async move {
                             // =================================================================================
                             // for each 1:1 edge in child (Actor,Genre,Character), query the scalar propagated data
+                            // firstly in embedded and then in OvB. Maximum consumption in memory will be either
+                            // EMBEDDED_CHILD_NODES or OV_MAX_BATCH_SIZE nodes.
                             // =================================================================================
                             let mut items: HashMap<String, DpPropagate> = HashMap::new();
+                            let mut bat_w_req: Vec<WriteRequest> = vec![];
 
                             for c_uid in cuids {
 
@@ -349,6 +358,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                     )
                                 };
 
+                                // reverse edge item : R#<node-type-sn>#edge_sk
+                                let r_target_sk: String = "R#".to_string() + p_ty.short_nm() + "#" + &p_edge_11_sk;
+                                bat_w_req = add_reverse_edge(&dyn_client, bat_w_req, c_uid.clone(), puid_, r_target_sk.clone(),0,0, &retry_ch__, table_name).await;
+
                                 // allocate node cache for one or more 1:1 edges in child node
                                 let mut node_cache: types::NodeCache =
                                     types::NodeCache(HashMap::new());
@@ -361,7 +374,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                     let pg_11_edge_cache_key =
                                         sk_base.clone() + pg_11_edge.c.as_str();
                                     println!(
-                                        "========== pg_11_edge_ [{}] ==========",
+                                        "========== pg_11_edge [{}] ==========",
                                         pg_11_edge_cache_key
                                     );
 
@@ -596,15 +609,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                     }
                                 }
                             }
-                            // ========================================================================
-                            // 9.2.3 for each 11 edge in child node persist propagated scalar data
-                            // =========================================================================
+                            // ===================================================================
+                            // 9.2.3 for all EMBEDDED child nodes persist scalars for each 11 edge 
+                            // ===================================================================
                             println!(" PERSIST embedded ");
                             persist(
                                     &dyn_client,
-                                    puid,
+                                    bat_w_req, 
+                                    puid_,
                                     &retry_ch__,
-                                    &ovb_pk_, //&ovb_pk,
+                                    &ovb_pk, //&ovb_pk, 
                                     items,
                                     table_name,
                                     false,
@@ -617,6 +631,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                         });
 
                         // handle OvB (Overflow Blocks) reading each batch of Uuids in each OvB
+                        // Persist to database each batch individually.
                         for (i, ouid) in ovbs.into_iter().enumerate() {
 
                             println!(" OvB now for OUID {}  [{}]",i, ouid.to_string());
@@ -630,7 +645,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                             //let p_edges_11 = p_edges_11.clone();
                             let sk_base = m_sk_base.clone();
                             let p_edge_11 = p_edge_11.clone();
-                            let ovb_pk_ = ovb_pk.clone(); // Arc it??
+                            let ovb_pk = ovb_pk_.clone(); // Arc it??
                             let p_edge_11_sk = p_edge_11_sk_.clone();
                             //let retry_ch_ = retry_ch_.clone();
 
@@ -640,8 +655,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                             // spawn a task for each OvB and process each batch
                             println!("spawn for OvB bid: {}",bid);
                             tokio::spawn(async move {
-                                let mut items: HashMap<String, DpPropagate> = HashMap::new();
                                 let mut id = 1;
+                                //let mut bat_w_req: Vec<WriteRequest> = vec![];
                                 // process cuids in each OvB batch
                                 while id <= bid {
 
@@ -661,7 +676,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                     // ===================================================================================
                                     // for each 1:1 edge in current child (Actor,Genre,Character), query the scalar propagated data
                                     // ===================================================================================
-                                    //let mut items: HashMap<String, DpPropagate> = HashMap::new();
+                                    let mut items: HashMap<String, DpPropagate> = HashMap::new();
                                     for c_uid in &cuids {
                                         println!(
                                             "----------- ovb uuid [{}] ---------",
@@ -944,24 +959,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                                             }
                                         }
                                     }
+                                    // ================================================================================
+                                    // 9.2.3 for each 11 edge in child node persist OvB batch worth of propagated scalar data
+                                    // ================================================================================
+                                    println!("PERSIST OvB .......items {}",items.len());
+                                    for (k,v) in &ovb_pk {
+                                        println!("ovb_pk {}  {:?}",k,v);
+                                    }
+                                    persist(
+                                        &dyn_client,
+                                        vec![], 
+                                        ouid.clone(), // TODO: Arc it??
+                                        &retry_ch__,
+                                        &ovb_pk,
+                                        items,
+                                        table_name,
+                                        true
+                                    )
+                                    .await;
+
                                 }
-                                // ========================================================================
-                                // 9.2.3 for each 11 edge in child node persist propagated scalar data
-                                // =========================================================================
-                                println!("PERSIST OvB .......items {}",items.len());
-                                for (k,v) in &ovb_pk_ {
-                                    println!("ovb_pk {}  {:?}",k,v);
-                                }
-                                persist(
-                                    &dyn_client,
-                                    ouid.clone(), // TODO: Arc it??
-                                    &retry_ch__,
-                                    &ovb_pk_,
-                                    items,
-                                    table_name,
-                                    true
-                                )
-                                .await;
 
                                 if let Err(e) = block_task_ch.send(true).await {
                                     panic!("error sending on channel task_ch - {}", e);
@@ -978,7 +995,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                         }
                     }
                     // concurrent task counter
-                    tasks += 1;
+                    node_tasks += 1;
                     // ====================================
                     // 9.2.4 send complete message to main
                     // ====================================
@@ -989,10 +1006,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
                 // =============================================================
                 // 9.3 Wait for task to complete if max concurrent tasks reached
                 // =============================================================
-                if tasks == MAX_TASKS {
+                if node_tasks == MAX_TASKS {
                     // wait for a task to finish...
-                    task_rx.recv().await;
-                    tasks -= 1;
+                    node_task_rx.recv().await;
+                    node_tasks -= 1;
                 }
             }
         }
@@ -1000,10 +1017,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
     // =========================================
     // 10.0 Wait for remaining tasks to complete
     // =========================================
-    while tasks > 0 {
+    while node_tasks > 0 {
         // wait for a task to finish...
-        task_rx.recv().await;
-        tasks -= 1;
+        node_task_rx.recv().await;
+        node_tasks -= 1;
     }
 
     println!("Waiting for support services to finish...");
@@ -1013,8 +1030,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Sync + Send + 'static>
     Ok(())
 }
 
+async fn add_reverse_edge(
+    dyn_client: &aws_sdk_dynamodb::Client,
+    bat_w_req : Vec<WriteRequest>,
+    child: Uuid,
+    target_uid: Uuid,
+    target_sk : String,
+    batch : i32,
+    id : i32,
+    retry_ch: &tokio::sync::mpsc::Sender<Vec<aws_sdk_dynamodb::types::WriteRequest>>,
+    table_name : &str,
+) -> Vec<WriteRequest> {
+
+    let put = aws_sdk_dynamodb::types::PutRequest::builder();
+    let mut put = put
+    .item(types::PK, AttributeValue::B(Blob::new(child)))
+    .item(types::SK, AttributeValue::S(target_sk))
+    .item(types::TARGET, AttributeValue::B(Blob::new(target_uid)))
+    .item(types::BID, AttributeValue::N(batch.to_string()))
+    .item(types::ID, AttributeValue::N(id.to_string()));   
+    
+    save_item(&dyn_client, bat_w_req, retry_ch, put, table_name).await
+
+}    
+
 async fn persist(
     dyn_client: &aws_sdk_dynamodb::Client,
+    mut bat_w_req: Vec<WriteRequest>,
     uid: Uuid,
     retry_ch: &tokio::sync::mpsc::Sender<Vec<aws_sdk_dynamodb::types::WriteRequest>>,
     ovb_pk: &HashMap<String, Vec<Uuid>>,
@@ -1023,7 +1065,7 @@ async fn persist(
     ovb : bool,
 ) {
     // persist to database
-    let mut bat_w_req: Vec<WriteRequest> = vec![];
+    //let mut bat_w_req: Vec<WriteRequest> = vec![];
     println!("============ Persist ============= {})",items.len());
     for (sk, mut e) in items {
         println!(
@@ -1342,14 +1384,13 @@ async fn fetch_child_nodes(
         .expect("di.nd contained none")
         .drain(..)
         .collect();
-    println!("fetch_child_nodes   [{:?}]",node.bid);
+
     let bid = node
         .bid
         .as_mut()
         .expect("di.bid contained none")
         .drain(ovb_start_idx..)
         .collect();
-    println!("fetch_child_nodes   [{:?}] ovb_start_idx {}",bid, ovb_start_idx);
 
     (cuid, ovb_pk, bid)
 }
@@ -1423,7 +1464,7 @@ async fn save_item(
     if bat_w_req.len() == DYNAMO_BATCH_SIZE {
         // =================================================================================
         // persist to Dynamodb
-        bat_w_req = persist_dynamo_batch(dyn_client, bat_w_req, retry_ch, table_name).await;
+        bat_w_req = persist_dynamo_batch(dyn_client, bat_w_req, &retry_ch, table_name).await;
         // =================================================================================
         //bat_w_req = print_batch(bat_w_req);
     }
